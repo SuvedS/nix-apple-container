@@ -169,7 +169,7 @@ let
       lib.mapAttrsToList (_: c: c.image) autoStartContainers
     )
   );
-  bootstrapManagedContainersScript = pkgs.writeShellScript "bootstrap-managed-containers" ''
+  bootstrapManagedContainersScript = pkgs.writeShellScriptBin "container-runtime" ''
     ${mkShellLogging "bootstrap-managed-containers"}
 
     set -e -o pipefail
@@ -270,6 +270,7 @@ let
           if [ "$domain" != "$CONTAINER_DOMAIN" ]; then
             nac_log "booting out duplicate managed label '$label' from '$domain'"
             launchctl bootout "$domain/$label" 2>/dev/null || true
+            nac_wait_for_label_unload "$domain" "$label" 30 || true
           fi
         else
           nac_log "booting out stale managed label '$label' from '$domain'"
@@ -444,7 +445,7 @@ let
       nixImagePath = nixImagePaths.${c.image} or null;
       args = mkContainerArgs name c;
     in
-    pkgs.writeShellScript "container-run-${name}" ''
+    pkgs.writeShellScriptBin "container-${name}" ''
       ${mkShellLogging "container-${name}"}
 
       if [ "$(id -un)" != "${cfg.user}" ]; then
@@ -531,7 +532,10 @@ let
       {
         Label = label;
         ProgramArguments = programArguments;
-        LimitLoadToSessionType = [ "Background" ];
+        LimitLoadToSessionType = [
+          "Aqua"
+          "Background"
+        ];
         RunAtLoad = runAtLoad;
         StandardOutPath = "${userHome}/Library/Logs/${logStem}.log";
         StandardErrorPath = "${userHome}/Library/Logs/${logStem}.err";
@@ -544,7 +548,7 @@ let
 
   runtimePlist = mkManagedLaunchAgentPlist {
     label = runtimeLabel;
-    programArguments = [ (toString bootstrapManagedContainersScript) ];
+    programArguments = [ "${bootstrapManagedContainersScript}/bin/container-runtime" ];
     logStem = "container-runtime";
     runAtLoad = true;
     keepAlive = {
@@ -564,7 +568,7 @@ let
       inherit label;
       plist = mkManagedLaunchAgentPlist {
         inherit label;
-        programArguments = [ (toString (mkContainerRunScript name c)) ];
+        programArguments = [ "${mkContainerRunScript name c}/bin/container-${name}" ];
         logStem = "container-${name}";
         runAtLoad = false;
         keepAlive = {
@@ -804,7 +808,7 @@ in
         done
 
         echo "nix-apple-container: bootstrapping launchd-managed containers..."
-        ${bootstrapManagedContainersScript}
+        ${bootstrapManagedContainersScript}/bin/container-runtime
       '';
     })
 
