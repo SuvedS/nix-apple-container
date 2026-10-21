@@ -4,8 +4,8 @@
   fetchurl,
   xar,
   cpio,
-  version ? "1.5.0",
-  hash ? "sha256-okgIyyAjGPocO77gxsaIf+EiX+iZ17aHoN3ZOb1lc/g=",
+  version ? "1.6.0",
+  hash ? "sha256-oITWbfL7VzFy1/kj+oPJIp0X9sGrYfCcipDEPatmugI=",
 }:
 
 stdenv.mkDerivation {
