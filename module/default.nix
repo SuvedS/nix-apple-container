@@ -61,7 +61,7 @@ let
     ''}
   '';
 
-  mkShellLogging = context: ''
+  mkShellLogging = context: shutdown: ''
     : "''${${logContextVar}:=${context}}"
 
     nac_timestamp() {
@@ -138,6 +138,7 @@ let
     # `container run` lingers, keeping the service registered while launchctl
     # bootstrap races with the pending unload (fails with status 5).
     nac_kill_child() {
+      ${shutdown}
       if [ -n "''${run_pid:-}" ] && kill -0 "$run_pid" 2>/dev/null; then
         nac_log "forwarding shutdown to container run child pid=$run_pid"
         kill "$run_pid" 2>/dev/null || true
@@ -170,7 +171,7 @@ let
     )
   );
   bootstrapManagedContainersScript = pkgs.writeShellScriptBin "container-runtime" ''
-    ${mkShellLogging "bootstrap-managed-containers"}
+    ${mkShellLogging "bootstrap-managed-containers" ""}
 
     set -e -o pipefail
 
@@ -446,7 +447,10 @@ let
       args = mkContainerArgs name c;
     in
     pkgs.writeShellScriptBin "container-${name}" ''
-      ${mkShellLogging "container-${name}"}
+      ${mkShellLogging "container-${name}" ''
+        nac_log "stopping container ${name} (timeout ${toString c.stopTimeout}s)"
+        ${bin} stop --time ${toString c.stopTimeout} ${lib.escapeShellArg name} || true
+      ''}
 
       if [ "$(id -un)" != "${cfg.user}" ]; then
         nac_log "launchd invoked as $(id -un); expected ${cfg.user}; exiting without action"
@@ -482,7 +486,7 @@ let
         wait_for_runtime || exit 0
 
         nac_log "startup attempt ''${startup_attempt}/''${max_startup_attempts}: reconciling existing container state"
-        ${bin} stop ${lib.escapeShellArg name} 2>/dev/null || true
+        ${bin} stop --time ${toString c.stopTimeout} ${lib.escapeShellArg name} 2>/dev/null || true
         ${bin} rm ${lib.escapeShellArg name} 2>/dev/null || true
 
         nac_log "running container ${name} from image ${c.image}"
@@ -570,6 +574,8 @@ let
         inherit label;
         programArguments = [ "${mkContainerRunScript name c}/bin/container-${name}" ];
         logStem = "container-${name}";
+        # Allow the container's grace period plus time to reap the CLI child.
+        extraConfig.ExitTimeOut = c.stopTimeout + 15;
         runAtLoad = false;
         keepAlive = {
           OtherJobEnabled = {

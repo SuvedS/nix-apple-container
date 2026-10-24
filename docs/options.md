@@ -26,6 +26,7 @@ The runtime default kernel is separate from the per-builder kernel used by
 |--------|------|---------|-------------|
 | `image` | string | *required* | Image name:tag (from `images.*` or a registry — the runtime pulls automatically) |
 | `autoStart` | bool | `false` | Run via launchd user agent on login. When false, the name is reserved (prevents drift cleanup) but no container is created |
+| `stopTimeout` | positive integer | `30` | Seconds for graceful shutdown before forced termination. Applies to reconciliation and launchd shutdown; the job reserves an additional 15 seconds to reap the CLI |
 | `cmd` | list of strings | `[]` | Override the image CMD |
 | `env` | attrs of strings | `{}` | Environment variables |
 | `volumes` | list of strings | `[]` | Volume mounts (macOS 26+). `host:container` for bind mounts or `name:container` for named volumes. Every entry must contain a `:` |
