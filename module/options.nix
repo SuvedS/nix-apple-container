@@ -19,6 +19,11 @@ let
         default = false;
         description = "Automatically start this container via launchd. When false, the container name is reserved (prevents drift cleanup) but no container is created or managed.";
       };
+      stopTimeout = lib.mkOption {
+        type = lib.types.ints.positive;
+        default = 30;
+        description = "Seconds to allow graceful container shutdown before forcing termination. Also reserves time for shutdown in the launchd job.";
+      };
       cmd = lib.mkOption {
         type = lib.types.listOf lib.types.str;
         default = [ ];
