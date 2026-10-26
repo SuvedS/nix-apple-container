@@ -506,7 +506,7 @@ let
         nac_log "running container ${name} from image ${c.image}"
         SECONDS=0
         set +e
-        ${lib.escapeShellArgs args} &
+        ${lib.escapeShellArgs (c.runPrefix ++ args)} &
         run_pid=$!
         nac_log "container run child pid=''${run_pid}"
         wait "$run_pid"

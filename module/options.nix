@@ -89,6 +89,12 @@ let
         default = [ ];
         description = "Extra arguments passed to 'container run'.";
       };
+      runPrefix = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [ ];
+        example = [ "op" "run" "--" ];
+        description = "Command that 'container run' is executed under, such as a secrets injector that supplies the values of value-less '--env NAME' arguments.";
+      };
     };
   };
 in
