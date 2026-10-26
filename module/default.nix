@@ -369,15 +369,22 @@ let
   '';
 
   registryImagePullScript = lib.optionalString (registryAutoStartImages != [ ]) ''
-    ${lib.concatMapStrings (image: ''
-      if ${runAs} ${bin} image inspect ${lib.escapeShellArg image} >/dev/null 2>&1; then
-        echo "nix-apple-container: image ${image} is present"
-      else
+    ${lib.concatMapStrings (
+      image:
+      let
+        imageArg = lib.escapeShellArg image;
+        labels = lib.mapAttrsToList (name: _: "dev.apple.container.${name}") (
+          lib.filterAttrs (_: c: c.image == image) autoStartContainers
+        );
+      in
+      ''
+        BEFORE_DIGEST=$(${runAs} ${bin} image inspect ${imageArg} 2>/dev/null \
+          | ${jq} -r '.[0].configuration.descriptor.digest // .[0].index.digest // empty' 2>/dev/null || echo "")
         attempt=1
         max_attempts=3
         while true; do
           echo "nix-apple-container: pulling registry image ${image} (attempt $attempt/$max_attempts)..."
-          if ${runAs} ${bin} image pull ${lib.escapeShellArg image}; then
+          if ${runAs} ${bin} image pull ${imageArg}; then
             break
           fi
           if [ "$attempt" -ge "$max_attempts" ]; then
@@ -388,8 +395,15 @@ let
           attempt=$((attempt + 1))
           sleep 5
         done
-      fi
-    '') registryAutoStartImages}
+        AFTER_DIGEST=$(${runAs} ${bin} image inspect ${imageArg} 2>/dev/null \
+          | ${jq} -r '.[0].configuration.descriptor.digest // .[0].index.digest // empty' 2>/dev/null || echo "")
+        if [ "$BEFORE_DIGEST" != "$AFTER_DIGEST" ]; then
+          ${lib.concatMapStrings (label: ''
+            printf '%s\n' ${lib.escapeShellArg label} >> "${changedManagedLabelsPath}"
+          '') labels}
+        fi
+      ''
+    ) registryAutoStartImages}
   '';
 
   mkContainerArgs =
