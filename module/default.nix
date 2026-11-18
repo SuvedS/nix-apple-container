@@ -191,7 +191,15 @@ let
 
     CONTAINER_MANAGER=$(launchctl managername 2>/dev/null || echo "")
     CONTAINER_DOMAIN=""
-    case "$CONTAINER_MANAGER" in
+    APISERVER_DOMAIN=""
+    for domain in "gui/$CONTAINER_UID" "user/$CONTAINER_UID"; do
+      if launchctl print "$domain/com.apple.container.apiserver" >/dev/null 2>&1; then
+        APISERVER_DOMAIN="$domain"
+        CONTAINER_DOMAIN="$domain"
+        break
+      fi
+    done
+    [ -n "$CONTAINER_DOMAIN" ] || case "$CONTAINER_MANAGER" in
       Aqua)
         CONTAINER_DOMAIN="gui/$CONTAINER_UID"
         ;;
@@ -232,7 +240,9 @@ let
       fi
     }
 
-    if run_container ${bin} system status >/dev/null 2>&1; then
+    if [ -n "$APISERVER_DOMAIN" ]; then
+      nac_log "runtime already registered in '$APISERVER_DOMAIN'"
+    elif run_container ${bin} system status >/dev/null 2>&1; then
       nac_log "runtime already running"
     else
       nac_log "runtime not running; starting with 'container system start --disable-kernel-install'"
@@ -602,11 +612,16 @@ let
   ) autoStartContainers;
 
   syncLaunchdFilesScript = pkgs.writeShellScript "sync-container-launchd-files" ''
-    for cmd in chmod cmp install rm touch; do
+    for cmd in chmod chown cmp install rm touch; do
       command -v "$cmd" >/dev/null 2>&1 || {
         echo "nix-apple-container: '$cmd' is required but not found in PATH" >&2
         exit 1
       }
+    done
+
+    for log in "${userHome}/Library/Logs"/container-*.log "${userHome}/Library/Logs"/container-*.err; do
+      [ -e "$log" ] || continue
+      chown "${cfg.user}" "$log"
     done
 
     sync_plist() {

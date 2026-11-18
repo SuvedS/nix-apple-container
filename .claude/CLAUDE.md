@@ -229,6 +229,11 @@ Upstream `container system start` is a one-shot command that registers `com.appl
 
 This is why the module must keep Apple `container` in the user's domain and cannot treat it like a normal system daemon. `LaunchDaemon + UserName` is valid launchd, but it is the wrong XPC domain for the upstream client.
 
+A user with both a GUI and a Background session can end up with the apiserver in `gui/<uid>` while the runtime agent and managed jobs load into `user/<uid>`. Jobs in `user/<uid>` then never see the apiserver and loop on "runtime not ready". The runtime script therefore bootstraps managed jobs into whichever domain already has `com.apple.container.apiserver` loaded (`gui` first, then `user`), and only falls back to `launchctl managername` (and `container system start`) when neither has it.
+
+### Root-owned log files stop the runtime agent from spawning
+If `~/Library/Logs/container-*.{log,err}` are owned by root, launchd cannot open them for the user agent and fails the spawn with `78: EX_CONFIG` before the script runs, so the logs stay empty. `sync-container-launchd-files` chowns those files back to the user on every activation.
+
 ### Stale apiserver launchd registration hangs all CLI commands
 If the `container` CLI was previously run from a different install path (e.g., a source build in `.build/debug/`, or a Nix store path that was later garbage collected), launchd retains the apiserver registration pointing to the old binary. Every `container` command — including `--help`, `system status`, `system stop` — hangs indefinitely at "checking if APIServer is alive" because XPC blocks waiting for launchd to activate a binary that doesn't exist (launchd enters exponential throttle). Manual fix: `launchctl bootout user/$(id -u)/com.apple.container.apiserver`. See [#1329](https://github.com/apple/container/issues/1329).
 
